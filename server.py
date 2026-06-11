@@ -12,6 +12,7 @@ import os
 import json
 import uuid
 import asyncio
+import datetime
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
@@ -30,6 +31,10 @@ PORT = int(os.environ.get("PORT", "8080"))
 # 20명 동시 환경에서는 여러 모델을 동시에 VRAM에 올리면 OOM이 나므로 1개로 고정한다.
 # 다른 모델을 허용하려면 콤마로 구분: ALLOWED_MODELS="qwen3:8b,llama3.1:8b"
 ALLOWED_MODELS = [m.strip() for m in os.environ.get("ALLOWED_MODELS", MODEL_NAME).split(",") if m.strip()]
+
+# GPU 모니터링 설정
+GPU_LOG_INTERVAL = int(os.environ.get("GPU_LOG_INTERVAL", "10"))   # 로그 기록 간격(초)
+GPU_LOG_FILE = os.environ.get("GPU_LOG_FILE", "logs/gpu_log.csv")  # CSV 로그 경로
 
 # 대화 기록 유지 턴 수 (메모리 절약 + 컨텍스트 충돌 방지)
 MAX_HISTORY_TURNS = 6   # user+assistant 합쳐 최근 6쌍(12개)까지 유지
@@ -286,6 +291,91 @@ async def reset(req: ChatRequest):
     if req.session_id and req.session_id in sessions:
         del sessions[req.session_id]
     return {"status": "초기화 완료"}
+
+
+# ─────────────────────────────────────────────
+# GPU 모니터링 (다른 PC에서도 /monitor 로 접속해 확인)
+# ─────────────────────────────────────────────
+async def read_gpu_stats() -> list[dict]:
+    """nvidia-smi로 GPU 상태를 읽어 리스트로 반환. GPU/드라이버 없으면 빈 리스트."""
+    query = "index,name,temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw,fan.speed"
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "nvidia-smi",
+            f"--query-gpu={query}",
+            "--format=csv,noheader,nounits",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=5.0)
+    except (FileNotFoundError, asyncio.TimeoutError):
+        return []
+
+    gpus = []
+    for line in out.decode(errors="ignore").strip().splitlines():
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < 8:
+            continue
+
+        def num(v):
+            try:
+                return float(v)
+            except ValueError:
+                return None
+
+        gpus.append({
+            "index": parts[0],
+            "name": parts[1],
+            "temp": num(parts[2]),           # ℃
+            "util": num(parts[3]),           # %
+            "mem_used": num(parts[4]),       # MiB
+            "mem_total": num(parts[5]),      # MiB
+            "power": num(parts[6]),          # W
+            "fan": num(parts[7]),            # %
+        })
+    return gpus
+
+
+@app.get("/api/gpu")
+async def gpu():
+    """현재 GPU 상태를 JSON으로 반환 (모니터링 페이지가 주기적으로 호출)"""
+    gpus = await read_gpu_stats()
+    return {
+        "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "gpus": gpus,
+        "available": bool(gpus),
+    }
+
+
+@app.get("/monitor")
+async def monitor():
+    """GPU 모니터링 대시보드 페이지 (다른 PC에서도 접속 가능)"""
+    return FileResponse("static/monitor.html")
+
+
+async def gpu_logger():
+    """백그라운드에서 주기적으로 GPU 상태를 CSV 파일에 기록한다."""
+    os.makedirs(os.path.dirname(GPU_LOG_FILE) or ".", exist_ok=True)
+    # 헤더가 없으면 한 번 작성
+    if not os.path.exists(GPU_LOG_FILE) or os.path.getsize(GPU_LOG_FILE) == 0:
+        with open(GPU_LOG_FILE, "w", encoding="utf-8") as f:
+            f.write("time,gpu_index,name,temp_c,util_pct,mem_used_mib,mem_total_mib,power_w,fan_pct\n")
+
+    while True:
+        gpus = await read_gpu_stats()
+        if gpus:
+            ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with open(GPU_LOG_FILE, "a", encoding="utf-8") as f:
+                for g in gpus:
+                    f.write(f"{ts},{g['index']},{g['name']},{g['temp']},{g['util']},"
+                            f"{g['mem_used']},{g['mem_total']},{g['power']},{g['fan']}\n")
+        await asyncio.sleep(GPU_LOG_INTERVAL)
+
+
+@app.on_event("startup")
+async def start_gpu_logger():
+    """서버 시작 시 GPU 로깅 백그라운드 태스크 실행"""
+    asyncio.create_task(gpu_logger())
 
 
 # 정적 파일 (CSS, JS)

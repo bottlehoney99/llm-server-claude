@@ -16,6 +16,7 @@ Thumbs.db
 
 # 로그
 *.log
+logs/
 
 # 에디터
 .vscode/

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPU 모니터링 — 게임 개발 AI 튜터</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    body { overflow: auto; }
+    .monitor-wrap { max-width: 900px; margin: 0 auto; padding: 24px 20px; }
+    .monitor-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 8px; }
+    .monitor-head h1 { font-size: 20px; }
+    .monitor-head .meta { font-size: 13px; color: var(--text-dim); }
+    .gpu-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+    .gpu-name { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+    .metric { background: var(--surface-2); border-radius: 10px; padding: 14px; }
+    .metric .label { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+    .metric .value { font-size: 24px; font-weight: 700; }
+    .metric .unit { font-size: 13px; font-weight: 500; color: var(--text-dim); margin-left: 2px; }
+    .bar { height: 6px; background: var(--border); border-radius: 4px; margin-top: 10px; overflow: hidden; }
+    .bar > span { display: block; height: 100%; border-radius: 4px; transition: width 0.4s; }
+    .ok { color: var(--green); } .warn { color: var(--yellow); } .danger { color: var(--red); }
+    .bar-ok { background: var(--green); } .bar-warn { background: var(--yellow); } .bar-danger { background: var(--red); }
+    .empty { text-align: center; color: var(--text-dim); padding: 40px; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 6px; }
+    a.back { color: var(--accent); text-decoration: none; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="monitor-wrap">
+    <div class="monitor-head">
+      <h1>🌡️ GPU 모니터링</h1>
+      <div class="meta">
+        <span class="dot"></span><span id="updated">연결 중…</span>
+        &nbsp;|&nbsp; <a class="back" href="/">← 튜터로 돌아가기</a>
+      </div>
+    </div>
+    <div id="cards"></div>
+  </div>
+
+  <script>
+    const cardsEl = document.getElementById("cards");
+    const updatedEl = document.getElementById("updated");
+
+    // 값에 따라 색상 등급 (온도/사용률 공통으로 쓰되 임계값만 다름)
+    function grade(value, warn, danger) {
+      if (value == null) return "";
+      if (value >= danger) return "danger";
+      if (value >= warn) return "warn";
+      return "ok";
+    }
+
+    function metric(label, value, unit, cls, barPct, barCls) {
+      const v = value == null ? "—" : Math.round(value);
+      const bar = barPct != null
+        ? `<div class="bar"><span class="${barCls}" style="width:${Math.min(barPct,100)}%"></span></div>`
+        : "";
+      return `<div class="metric">
+        <div class="label">${label}</div>
+        <div class="value ${cls}">${v}<span class="unit">${unit}</span></div>
+        ${bar}
+      </div>`;
+    }
+
+    function renderGpu(g) {
+      const tempCls = grade(g.temp, 80, 87);          // 80℃ 주의, 87℃ 위험
+      const utilCls = grade(g.util, 101, 102);         // 사용률은 색 강조 안 함(항상 ok)
+      const memPct = g.mem_total ? (g.mem_used / g.mem_total * 100) : null;
+      const memCls = grade(memPct, 85, 95);
+      return `<div class="gpu-card">
+        <div class="gpu-name">GPU ${g.index} · ${g.name}</div>
+        <div class="metrics">
+          ${metric("온도", g.temp, "℃", tempCls, g.temp, "bar-" + (tempCls||"ok"))}
+          ${metric("사용률", g.util, "%", "", g.util, "bar-ok")}
+          ${metric("VRAM", g.mem_used, " MiB", memCls, memPct, "bar-" + (memCls||"ok"))}
+          ${metric("전력", g.power, " W", "", null, null)}
+          ${metric("팬", g.fan, "%", "", g.fan, "bar-ok")}
+        </div>
+        ${g.mem_total ? `<div class="meta" style="margin-top:10px">VRAM ${Math.round(g.mem_used)} / ${Math.round(g.mem_total)} MiB</div>` : ""}
+      </div>`;
+    }
+
+    async function poll() {
+      try {
+        const res = await fetch("/api/gpu");
+        const data = await res.json();
+        if (!data.available || !data.gpus.length) {
+          cardsEl.innerHTML = `<div class="empty">GPU 정보를 읽을 수 없습니다.<br>nvidia-smi가 없거나 NVIDIA GPU가 아닙니다.</div>`;
+          updatedEl.textContent = "GPU 없음";
+          return;
+        }
+        cardsEl.innerHTML = data.gpus.map(renderGpu).join("");
+        updatedEl.textContent = "마지막 업데이트 " + data.time;
+      } catch (e) {
+        updatedEl.textContent = "서버 연결 오류";
+      }
+    }
+
+    poll();
+    setInterval(poll, 3000);   // 3초마다 갱신
+  </script>
+</body>
+</html>
