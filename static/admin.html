@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>관리자 — 게임 개발 AI 튜터</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    body { overflow: auto; display: flex; align-items: center; justify-content: center; }
+    .admin-card {
+      width: 100%; max-width: 420px; margin: 24px;
+      background: var(--surface); border: 1px solid var(--border-soft);
+      border-radius: 20px; padding: 32px; box-shadow: var(--shadow);
+    }
+    .admin-card h1 {
+      font-size: 22px; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 6px;
+      background: var(--grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .admin-card .desc { color: var(--text-dim); font-size: 14px; margin-bottom: 24px; line-height: 1.6; }
+    label { display: block; font-size: 13px; font-weight: 600; color: var(--text-dim); margin-bottom: 8px; }
+    .token-input {
+      width: 100%; background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 13px 15px; color: var(--text);
+      font-family: var(--mono-font); font-size: 14px; outline: none; transition: border-color 0.18s, box-shadow 0.18s;
+    }
+    .token-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,140,255,0.15); }
+    .row { display: flex; align-items: center; gap: 8px; margin: 14px 0 22px; }
+    .row input { accent-color: var(--accent); }
+    .row label { margin: 0; font-weight: 500; color: var(--text-dim); cursor: pointer; }
+    .shutdown-btn {
+      width: 100%; border: none; border-radius: 12px; padding: 14px;
+      font-family: inherit; font-size: 15px; font-weight: 700; color: #fff; cursor: pointer;
+      background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+      box-shadow: 0 4px 14px rgba(248,113,113,0.35); transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+    }
+    .shutdown-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(248,113,113,0.45); }
+    .shutdown-btn:active { transform: scale(0.98); }
+    .shutdown-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+    .result { margin-top: 18px; font-size: 14px; text-align: center; min-height: 20px; }
+    .result.ok { color: var(--green); } .result.err { color: var(--red); }
+    .back { display: inline-block; margin-top: 20px; color: var(--accent); text-decoration: none; font-size: 13px; }
+    .back:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="admin-card">
+    <h1>🔒 관리자 콘솔</h1>
+    <p class="desc">관리자 토큰을 입력하면 다른 PC에서도 서버를 안전하게 종료할 수 있어요. 토큰은 서버 시작 시 콘솔에 표시됩니다.</p>
+
+    <label for="token">관리자 토큰</label>
+    <input id="token" class="token-input" type="password" placeholder="서버 콘솔에 표시된 토큰 입력" autocomplete="off">
+    <div class="row">
+      <input id="show" type="checkbox">
+      <label for="show">토큰 보기 · 이 브라우저에 기억</label>
+    </div>
+
+    <button id="shutdownBtn" class="shutdown-btn">⏻ 서버 종료</button>
+    <div id="result" class="result"></div>
+
+    <a class="back" href="/">← 튜터로 돌아가기</a>
+  </div>
+
+  <script>
+    const tokenEl = document.getElementById("token");
+    const showEl = document.getElementById("show");
+    const btn = document.getElementById("shutdownBtn");
+    const resultEl = document.getElementById("result");
+
+    // 이전에 기억해둔 토큰 불러오기
+    const saved = localStorage.getItem("adminToken");
+    if (saved) { tokenEl.value = saved; showEl.checked = true; }
+
+    showEl.addEventListener("change", () => {
+      tokenEl.type = showEl.checked ? "text" : "password";
+    });
+    tokenEl.type = showEl.checked ? "text" : "password";
+
+    btn.addEventListener("click", async () => {
+      const token = tokenEl.value.trim();
+      if (!token) { resultEl.className = "result err"; resultEl.textContent = "토큰을 입력하세요."; return; }
+      if (!confirm("정말 서버를 종료할까요? 학생들의 접속이 모두 끊깁니다.")) return;
+
+      // 토큰 기억 옵션
+      if (showEl.checked) localStorage.setItem("adminToken", token);
+      else localStorage.removeItem("adminToken");
+
+      btn.disabled = true;
+      resultEl.className = "result";
+      resultEl.textContent = "종료 요청 중…";
+      try {
+        const res = await fetch("/api/shutdown", {
+          method: "POST",
+          headers: { "X-Admin-Token": token },
+        });
+        if (res.ok) {
+          resultEl.className = "result ok";
+          resultEl.textContent = "✅ 서버가 종료되었습니다. 이제 이 페이지는 응답하지 않습니다.";
+          btn.textContent = "종료됨";
+        } else {
+          const data = await res.json().catch(() => ({}));
+          resultEl.className = "result err";
+          resultEl.textContent = "❌ " + (data.error || "종료 실패 (토큰 확인)");
+          btn.disabled = false;
+        }
+      } catch (e) {
+        // 서버가 종료되면 연결이 끊겨 fetch가 실패할 수 있음 → 사실상 성공
+        resultEl.className = "result ok";
+        resultEl.textContent = "✅ 서버 연결이 끊겼습니다. 종료된 것으로 보입니다.";
+        btn.textContent = "종료됨";
+      }
+    });
+  </script>
+</body>
+</html>

@@ -11,10 +11,12 @@ pygame 게임 개발 도움을 받을 수 있는 서버입니다.
 import os
 import json
 import uuid
+import time
+import secrets
 import asyncio
 import datetime
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, BackgroundTasks, Header
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -35,6 +37,10 @@ ALLOWED_MODELS = [m.strip() for m in os.environ.get("ALLOWED_MODELS", MODEL_NAME
 # GPU 모니터링 설정
 GPU_LOG_INTERVAL = int(os.environ.get("GPU_LOG_INTERVAL", "10"))   # 로그 기록 간격(초)
 GPU_LOG_FILE = os.environ.get("GPU_LOG_FILE", "logs/gpu_log.csv")  # CSV 로그 경로
+
+# 원격 종료용 관리자 토큰. 환경변수로 지정하면 그 값을 쓰고, 없으면 매 실행마다 랜덤 생성.
+# 이 토큰을 아는 사람(관리자)만 /admin 에서 서버를 종료할 수 있다. 학생에게는 알려주지 말 것.
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN") or secrets.token_urlsafe(8)
 
 # 대화 기록 유지 턴 수 (메모리 절약 + 컨텍스트 충돌 방지)
 MAX_HISTORY_TURNS = 6   # user+assistant 합쳐 최근 6쌍(12개)까지 유지
@@ -294,6 +300,31 @@ async def reset(req: ChatRequest):
 
 
 # ─────────────────────────────────────────────
+# 관리자용 원격 종료 (토큰을 아는 관리자만 가능)
+# ─────────────────────────────────────────────
+def _delayed_exit():
+    """응답이 전송될 시간을 준 뒤 프로세스를 종료한다."""
+    time.sleep(0.5)
+    os._exit(0)
+
+
+@app.get("/admin")
+async def admin():
+    """관리자 페이지 (토큰 입력 + 서버 종료 버튼). 학생에게 공유하지 말 것."""
+    return FileResponse("static/admin.html")
+
+
+@app.post("/api/shutdown")
+async def shutdown(background_tasks: BackgroundTasks, x_admin_token: str | None = Header(default=None)):
+    """관리자 토큰이 일치할 때만 서버를 종료한다. 학생은 토큰이 없어 종료 불가."""
+    if x_admin_token != ADMIN_TOKEN:
+        return JSONResponse(status_code=401, content={"error": "관리자 토큰이 올바르지 않습니다."})
+    # 응답을 먼저 보낸 뒤(백그라운드 태스크) 프로세스를 종료
+    background_tasks.add_task(_delayed_exit)
+    return {"status": "서버를 종료합니다."}
+
+
+# ─────────────────────────────────────────────
 # GPU 모니터링 (다른 PC에서도 /monitor 로 접속해 확인)
 # ─────────────────────────────────────────────
 async def read_gpu_stats() -> list[dict]:
@@ -409,5 +440,12 @@ if __name__ == "__main__":
         # 그래도 안 되면 ASCII로 폴백
         print(f"[게임 개발 AI 튜터] model={MODEL_NAME} addr=http://{HOST}:{PORT} ollama={OLLAMA_URL}"
               .encode("ascii", "replace").decode("ascii"))
+
+    # 관리자 종료 토큰 안내 (이 토큰을 아는 사람만 /admin 에서 원격 종료 가능)
+    try:
+        print(f"  관리자 페이지: http://{HOST}:{PORT}/admin")
+        print(f"  관리자 종료 토큰: {ADMIN_TOKEN}   (학생에게 공유하지 마세요)\n")
+    except UnicodeEncodeError:
+        print(f"  admin page: http://{HOST}:{PORT}/admin  token: {ADMIN_TOKEN}\n")
 
     uvicorn.run(app, host=HOST, port=PORT, log_level="info")
