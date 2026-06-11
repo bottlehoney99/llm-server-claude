@@ -4,27 +4,40 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GPU 모니터링 — 게임 개발 AI 튜터</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
   <style>
     body { overflow: auto; }
-    .monitor-wrap { max-width: 900px; margin: 0 auto; padding: 24px 20px; }
-    .monitor-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 8px; }
-    .monitor-head h1 { font-size: 20px; }
-    .monitor-head .meta { font-size: 13px; color: var(--text-dim); }
-    .gpu-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
-    .gpu-name { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+    .monitor-wrap { max-width: 920px; margin: 0 auto; padding: 32px 22px; }
+    .monitor-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; flex-wrap: wrap; gap: 10px; }
+    .monitor-head h1 {
+      font-size: 22px; font-weight: 800; letter-spacing: -0.03em;
+      background: var(--grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .monitor-head .meta { font-size: 13px; color: var(--text-dim); font-weight: 500; }
+    .gpu-card {
+      background: var(--surface); border: 1px solid var(--border-soft); border-radius: 18px;
+      padding: 22px; margin-bottom: 18px; box-shadow: var(--shadow);
+    }
+    .gpu-name { font-size: 15px; font-weight: 700; margin-bottom: 18px; display: flex; align-items: center; gap: 9px; }
+    .gpu-name::before { content: "🖥️"; font-size: 18px; }
     .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
-    .metric { background: var(--surface-2); border-radius: 10px; padding: 14px; }
-    .metric .label { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
-    .metric .value { font-size: 24px; font-weight: 700; }
-    .metric .unit { font-size: 13px; font-weight: 500; color: var(--text-dim); margin-left: 2px; }
-    .bar { height: 6px; background: var(--border); border-radius: 4px; margin-top: 10px; overflow: hidden; }
-    .bar > span { display: block; height: 100%; border-radius: 4px; transition: width 0.4s; }
+    .metric { background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 13px; padding: 16px; }
+    .metric .label { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; font-weight: 600; letter-spacing: 0.01em; }
+    .metric .value { font-size: 26px; font-weight: 700; font-family: var(--mono-font); }
+    .metric .unit { font-size: 13px; font-weight: 500; color: var(--text-dim); margin-left: 2px; font-family: var(--ui-font); }
+    .bar { height: 6px; background: var(--border); border-radius: 999px; margin-top: 12px; overflow: hidden; }
+    .bar > span { display: block; height: 100%; border-radius: 999px; transition: width 0.5s ease; }
     .ok { color: var(--green); } .warn { color: var(--yellow); } .danger { color: var(--red); }
     .bar-ok { background: var(--green); } .bar-warn { background: var(--yellow); } .bar-danger { background: var(--red); }
-    .empty { text-align: center; color: var(--text-dim); padding: 40px; }
-    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 6px; }
-    a.back { color: var(--accent); text-decoration: none; font-size: 13px; }
+    .empty { text-align: center; color: var(--text-dim); padding: 56px 20px; background: var(--surface); border: 1px solid var(--border-soft); border-radius: 18px; line-height: 1.7; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 6px; box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+    @keyframes pulse { 50% { opacity: 0.4; } }
+    a.back { color: var(--accent); text-decoration: none; font-size: 13px; font-weight: 500; }
+    a.back:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
