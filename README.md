@@ -1,7 +1,7 @@
 # 🎮 게임 개발 AI 튜터 서버
 
 특성화고 1학년 학생들이 pygame으로 게임을 만들도록 돕는 로컬 LLM 서버입니다.
-개인 PC에서 Ollama(llama3.1:8b)를 띄우고, 학생들이 웹 브라우저로 접속합니다.
+개인 PC에서 Ollama(qwen3:8b)를 띄우고, 학생들이 웹 브라우저로 접속합니다.
 
 ---
 
@@ -72,7 +72,7 @@ cloudflared tunnel --url http://localhost:8080
 
 | 항목 | 기본값 | 설명 |
 |------|--------|------|
-| MODEL_NAME | llama3.1:8b | 사용할 모델 |
+| MODEL_NAME | qwen3:8b | 사용할 모델 (드롭다운에서 변경 가능) |
 | PORT | 8080 | 서버 포트 |
 | MAX_HISTORY_TURNS | 6 | 기억할 대화 턴 수 |
 | num_predict | 1536 | 응답 최대 길이 |
@@ -113,7 +113,7 @@ export OLLAMA_NUM_PARALLEL=2
 | 증상 | 원인 / 해결 |
 |------|------------|
 | "Ollama 미연결" 표시 | Ollama가 꺼져 있음 → `ollama serve` 실행 |
-| "모델 로딩 필요" 표시 | 모델 미설치 → `ollama pull llama3.1:8b` |
+| "모델 로딩 필요" 표시 | 모델 미설치 → `ollama pull qwen3:8b` |
 | 응답이 너무 느림 | GPU 미사용 가능성 → `ollama ps`로 `100% GPU` 확인 |
 | 영어로 답변함 | 모델 한계 → EXAONE/Qwen 등 한국어 모델로 교체 |
 | 응답이 중간에 잘림 | `num_predict` 값을 늘리기 (server.py) |

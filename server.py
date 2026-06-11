@@ -1,11 +1,11 @@
 """
 바이브코딩 게임 개발 AI 에이전트 — 로컬 LLM 서버
 =================================================
-개인 PC에서 Ollama(llama3.1:8b)를 띄우고, 학생들이 웹 브라우저로 접속해
+개인 PC에서 Ollama(qwen3:8b)를 띄우고, 학생들이 웹 브라우저로 접속해
 pygame 게임 개발 도움을 받을 수 있는 서버입니다.
 
 실행: python server.py
-필요: Ollama 실행 중 + llama3.1:8b 모델 다운로드 완료
+필요: Ollama 실행 중 + qwen3:8b 모델 다운로드 완료
 """
 
 import os
@@ -22,9 +22,14 @@ from pydantic import BaseModel
 # 설정 (환경변수로 덮어쓸 수 있음)
 # ─────────────────────────────────────────────
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-MODEL_NAME = os.environ.get("MODEL_NAME", "llama3.1:8b")
+MODEL_NAME = os.environ.get("MODEL_NAME", "qwen3:8b")
 HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8080"))
+
+# 학생이 드롭다운에서 고를 수 있는 모델 화이트리스트.
+# 20명 동시 환경에서는 여러 모델을 동시에 VRAM에 올리면 OOM이 나므로 1개로 고정한다.
+# 다른 모델을 허용하려면 콤마로 구분: ALLOWED_MODELS="qwen3:8b,llama3.1:8b"
+ALLOWED_MODELS = [m.strip() for m in os.environ.get("ALLOWED_MODELS", MODEL_NAME).split(",") if m.strip()]
 
 # 대화 기록 유지 턴 수 (메모리 절약 + 컨텍스트 충돌 방지)
 MAX_HISTORY_TURNS = 6   # user+assistant 합쳐 최근 6쌍(12개)까지 유지
@@ -36,7 +41,7 @@ MODEL_OPTIONS = {
     "top_k": 40,
     "repeat_penalty": 1.1,
     "num_predict": 1536,   # 출력 최대 토큰 (전체 코드 생성용)
-    "num_ctx": 8192,       # 컨텍스트 윈도우 (RTX 5070 12GB에서 실측 권장)
+    "num_ctx": 4096,       # 컨텍스트 윈도우 (20명 동시용으로 축소 — VRAM 절약 + 병렬 슬롯 확보)
 }
 
 # ─────────────────────────────────────────────
@@ -149,12 +154,30 @@ sessions: dict[str, list] = {}
 class ChatRequest(BaseModel):
     session_id: str | None = None
     message: str
+    model: str | None = None   # 사용자가 고른 모델 (없으면 기본 MODEL_NAME 사용)
 
 
 @app.get("/")
 async def index():
     """채팅 웹페이지 제공"""
     return FileResponse("static/index.html")
+
+
+@app.get("/api/models")
+async def models():
+    """선택 가능한 모델 목록 + 기본 모델 반환 (프론트 드롭다운용).
+    화이트리스트(ALLOWED_MODELS)에 든 모델만 노출해 동시 다중 모델 로딩(OOM)을 막는다."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(f"{OLLAMA_URL}/api/tags")
+            r.raise_for_status()
+            installed = [m["name"] for m in r.json().get("models", [])]
+            # 허용 목록 ∩ 실제 설치된 모델만 노출 (설치 안 된 모델 고르는 사고 방지)
+            names = [m for m in ALLOWED_MODELS if m in installed] or [MODEL_NAME]
+            return {"models": names, "default": MODEL_NAME}
+    except Exception as e:
+        # 목록을 못 가져와도 기본 모델은 쓸 수 있게 반환
+        return {"models": [MODEL_NAME], "default": MODEL_NAME, "error": str(e)}
 
 
 @app.get("/api/health")
@@ -187,6 +210,10 @@ async def chat(req: ChatRequest):
     session_id = req.session_id or str(uuid.uuid4())
     history = sessions.get(session_id, [])
 
+    # 사용자가 고른 모델 사용 (없으면 기본 모델). 단, 화이트리스트에 든 모델만 허용.
+    # 허용 외 모델 요청은 무시하고 기본 모델로 대체해 예기치 않은 모델 로딩(OOM)을 막는다.
+    model_name = req.model if req.model in ALLOWED_MODELS else MODEL_NAME
+
     # 후속 질문이면(이미 코드를 한 번 준 적이 있으면) 생성 직전에 규칙을 다시 주입.
     # 약한 로컬 모델은 시스템 프롬프트보다 "방금 읽은 마지막 문장"을 더 잘 따르므로,
     # 사용자 메시지 끝에 짧은 리마인더를 붙여 전체 코드 반복 출력을 막는다.
@@ -215,7 +242,7 @@ async def chat(req: ChatRequest):
                     "POST",
                     f"{OLLAMA_URL}/api/chat",
                     json={
-                        "model": MODEL_NAME,
+                        "model": model_name,
                         "messages": messages,
                         "stream": True,
                         "options": MODEL_OPTIONS,

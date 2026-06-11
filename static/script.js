@@ -8,10 +8,35 @@ const sendBtn = document.getElementById("sendBtn");
 const resetBtn = document.getElementById("resetBtn");
 const homeBtn = document.getElementById("homeBtn");
 const statusEl = document.getElementById("status");
+const modelSelect = document.getElementById("modelSelect");
 
 // 세션 ID (localStorage 미사용 — 브라우저 메모리에만 유지)
 let sessionId = null;
 let isStreaming = false;
+let selectedModel = null;   // 사용자가 고른 모델 (null이면 서버 기본값)
+
+// ─────────────────────────────────────────────
+// 설치된 모델 목록 불러오기 → 드롭다운 채우기
+// ─────────────────────────────────────────────
+async function loadModels() {
+  try {
+    const res = await fetch("/api/models");
+    const data = await res.json();
+    const models = data.models || [];
+    selectedModel = data.default || models[0] || null;
+    modelSelect.innerHTML = models
+      .map(m => `<option value="${m}"${m === selectedModel ? " selected" : ""}>${m}</option>`)
+      .join("");
+  } catch {
+    modelSelect.innerHTML = `<option>모델 목록 불러오기 실패</option>`;
+  }
+}
+loadModels();
+
+// 사용자가 모델을 바꾸면 기억해두고, 다음 질문부터 적용
+modelSelect.addEventListener("change", () => {
+  selectedModel = modelSelect.value;
+});
 
 // ─────────────────────────────────────────────
 // 서버 상태 확인
@@ -135,7 +160,7 @@ async function sendMessage(text) {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sessionId, message: text }),
+      body: JSON.stringify({ session_id: sessionId, message: text, model: selectedModel }),
     });
 
     const reader = res.body.getReader();
