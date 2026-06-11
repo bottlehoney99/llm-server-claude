@@ -5,8 +5,9 @@ echo   Game Dev AI Tutor - Server Start
 echo ============================================
 echo.
 
-REM 동시 사용(20명) 대비 Ollama 설정: 병렬 2개 처리 + 모델 1개만 VRAM 로딩(OOM 방지)
-REM 주의: 이미 떠 있는 ollama serve에는 적용 안 됨. 적용하려면 Ollama를 완전히 종료 후 재시작.
+REM Concurrency settings for ~20 users: 2 parallel requests + keep only 1 model in VRAM (avoid OOM)
+REM Note: these do NOT apply to an already-running "ollama serve".
+REM To apply, fully quit Ollama (incl. tray app) and restart.
 set OLLAMA_NUM_PARALLEL=2
 set OLLAMA_MAX_LOADED_MODELS=1
 
@@ -28,6 +29,7 @@ if errorlevel 1 (
 echo [3/3] Starting web server...
 echo.
 echo   Open http://localhost:8080 in your browser.
+echo   Admin page: http://localhost:8080/admin (shutdown token shown below)
 echo   Press Ctrl+C in this window to stop.
 echo.
 
