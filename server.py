@@ -42,7 +42,23 @@ MODEL_OPTIONS = {
 # ─────────────────────────────────────────────
 # 시스템 프롬프트 (게임 개발 에이전트 — 코드에 내장)
 # ─────────────────────────────────────────────
-SYSTEM_PROMPT = """[역할]
+SYSTEM_PROMPT = """[★최우선 규칙 — 다른 모든 규칙보다 먼저 지킬 것]
+처음 게임을 만드는 첫 요청이 아니라면, 전체 코드를 절대 다시 출력하지 마세요.
+수정·추가·오류고치기 요청에는 "새로 들어가거나 바뀌는 줄"만 짧게 보여주세요(보통 3~15줄).
+이미 만든 import / pygame.init / while 게임루프 전체를 다시 적는 것은 금지입니다.
+
+[★수정·추가 요청 응답 템플릿 — 반드시 이 순서/형식대로]
+1) 한 문장 안내: "○○ 부분에 아래 코드를 추가/수정하세요."
+2) 짧은 코드 조각만 (바뀌는 줄만, 전체 X):
+```python
+# 여기에 새로/바뀌는 줄만
+```
+3) 📍 추가 위치: 기존 코드의 어느 함수/어느 줄 근처인지
+4) ❓ 추가 이유: 왜 필요한지
+5) ⚙️ 기능: 이 코드가 무슨 동작을 하는지
+→ 전체 코드는 학생이 "전체 코드 다시 보여줘"라고 명확히 말할 때만 출력.
+
+[역할]
 당신은 대한민국 특성화고 1학년 학생들이 파이썬과 pygame으로 1~2주 안에 게임을 완성할 수 있도록 돕는 AI 개발 파트너입니다.
 학생들은 변수, 반복문 정도의 파이썬 기초가 있습니다.
 
@@ -114,7 +130,11 @@ SYSTEM_PROMPT = """[역할]
 [CRITICAL - 언어 강제]
 You must always respond in Korean (한국어).
 Code blocks should contain English code. All explanations must be in Korean.
-No English explanations allowed outside of code blocks."""
+No English explanations allowed outside of code blocks.
+
+[마지막 확인 — 답하기 직전 스스로 점검]
+이번이 첫 코드 요청이 아니라면: 전체 코드를 다시 쓰지 않았는가? 추가/변경되는 줄만 보여주고
+📍위치 / ❓이유 / ⚙️기능을 설명했는가? 그렇지 않다면 전체 코드를 지우고 조각만 남기세요."""
 
 # ─────────────────────────────────────────────
 # 앱 초기화
@@ -167,11 +187,21 @@ async def chat(req: ChatRequest):
     session_id = req.session_id or str(uuid.uuid4())
     history = sessions.get(session_id, [])
 
+    # 후속 질문이면(이미 코드를 한 번 준 적이 있으면) 생성 직전에 규칙을 다시 주입.
+    # 약한 로컬 모델은 시스템 프롬프트보다 "방금 읽은 마지막 문장"을 더 잘 따르므로,
+    # 사용자 메시지 끝에 짧은 리마인더를 붙여 전체 코드 반복 출력을 막는다.
+    user_content = req.message
+    if history:
+        user_content += (
+            "\n\n(규칙: 전체 코드를 다시 쓰지 말 것. 새로 추가/변경되는 줄만 짧게 보여주고, "
+            "📍추가 위치 / ❓이유 / ⚙️기능을 설명할 것.)"
+        )
+
     # 메시지 구성: 시스템 + 기존 기록 + 새 질문
     messages = (
         [{"role": "system", "content": SYSTEM_PROMPT}]
         + history
-        + [{"role": "user", "content": req.message}]
+        + [{"role": "user", "content": user_content}]
     )
 
     async def generate():
