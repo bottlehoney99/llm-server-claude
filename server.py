@@ -383,8 +383,18 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 if __name__ == "__main__":
+    import sys
     import uvicorn
-    print(f"""
+
+    # 콘솔 인코딩이 UTF-8이 아니면(예: Windows cp949) 박스 문자가 깨지며 죽을 수 있어
+    # stdout/stderr를 UTF-8로 재설정한다. 실패해도 무시.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
+    banner = f"""
 ╔════════════════════════════════════════════╗
 ║   게임 개발 AI 튜터 서버 시작                ║
 ╠════════════════════════════════════════════╣
@@ -392,5 +402,12 @@ if __name__ == "__main__":
 ║   주소:   http://{HOST}:{PORT}{' ' * (24 - len(str(PORT)))}║
 ║   Ollama: {OLLAMA_URL:<32}║
 ╚════════════════════════════════════════════╝
-""")
+"""
+    try:
+        print(banner)
+    except UnicodeEncodeError:
+        # 그래도 안 되면 ASCII로 폴백
+        print(f"[게임 개발 AI 튜터] model={MODEL_NAME} addr=http://{HOST}:{PORT} ollama={OLLAMA_URL}"
+              .encode("ascii", "replace").decode("ascii"))
+
     uvicorn.run(app, host=HOST, port=PORT, log_level="info")
