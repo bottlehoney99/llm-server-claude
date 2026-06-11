@@ -6,6 +6,7 @@ const messagesEl = document.getElementById("messages");
 const inputEl = document.getElementById("input");
 const sendBtn = document.getElementById("sendBtn");
 const resetBtn = document.getElementById("resetBtn");
+const homeBtn = document.getElementById("homeBtn");
 const statusEl = document.getElementById("status");
 
 // 세션 ID (localStorage 미사용 — 브라우저 메모리에만 유지)
@@ -191,12 +192,84 @@ inputEl.addEventListener("input", () => {
   inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + "px";
 });
 
-// 빠른 버튼
-document.querySelectorAll(".quick-btn").forEach(btn => {
-  btn.addEventListener("click", () => sendMessage(btn.dataset.prompt));
-});
+// ─────────────────────────────────────────────
+// 메뉴별 예시 질문 (자동 전송하지 않고 보여주기만 함)
+// ─────────────────────────────────────────────
+const MENU_EXAMPLES = {
+  idea: {
+    title: "💡 게임 아이디어 추천",
+    desc: "어떤 게임을 만들지 고민될 때 참고하세요. 아래 예시처럼 물어봐도 되고, 직접 질문해도 돼요.",
+    examples: [
+      "1~2주 안에 만들 수 있는 쉬운 pygame 게임 5개 추천해줘.",
+      "혼자 만들 수 있는 간단한 2D 게임 아이디어 알려줘.",
+      "피하기 게임이랑 슈팅 게임 중에 뭐가 더 쉬워?",
+      "친구들이랑 같이 즐길 수 있는 점수 경쟁 게임 아이디어 줘.",
+    ],
+  },
+  structure: {
+    title: "🧱 게임 기본 구조 설계하기",
+    desc: "게임의 뼈대를 어떻게 잡을지 도와드려요. 아래 예시를 참고해서 만들고 싶은 게임을 설명해 보세요.",
+    examples: [
+      "공 피하기 게임을 만들고 싶어. 기본 구조를 어떻게 짜야 해?",
+      "pygame 게임의 기본 틀(창, 게임루프)이 어떻게 생겼는지 알려줘.",
+      "캐릭터가 움직이고 점수가 올라가는 게임은 어떤 순서로 만들어야 해?",
+      "내가 만들 게임에 어떤 변수랑 함수가 필요할지 같이 정리해줘.",
+    ],
+  },
+};
 
-// 새 대화
+// 환영 화면으로 돌아가기
+function showWelcome() {
+  messagesEl.innerHTML = `
+    <div class="welcome">
+      <div class="welcome-icon">🚀</div>
+      <h2>안녕하세요! 게임 개발을 도와드릴게요</h2>
+      <p>아래 메뉴를 누르면 예시 질문을 보여드려요. 예시를 참고해서 직접 질문해 보세요.</p>
+      <div class="quick-buttons">
+        <button class="quick-btn" data-menu="idea">💡 게임 아이디어 추천</button>
+        <button class="quick-btn" data-menu="structure">🧱 게임 기본 구조 설계하기</button>
+      </div>
+    </div>`;
+  bindQuickButtons();
+}
+
+// 메뉴 클릭 시 예시 질문 화면 표시
+function showExamples(menuKey) {
+  const menu = MENU_EXAMPLES[menuKey];
+  if (!menu) return;
+  const exampleHtml = menu.examples.map(q =>
+    `<button class="example-btn" data-q="${q.replace(/"/g, "&quot;")}">${q}</button>`
+  ).join("");
+  messagesEl.innerHTML = `
+    <div class="welcome">
+      <h2>${menu.title}</h2>
+      <p>${menu.desc}</p>
+      <div class="example-list">${exampleHtml}</div>
+      <p class="example-hint">👇 예시를 누르면 입력창에 채워져요. 수정해서 보내도 돼요.</p>
+    </div>`;
+  // 예시 클릭 → 입력창에 채우기 (자동 전송 X)
+  messagesEl.querySelectorAll(".example-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      inputEl.value = btn.dataset.q;
+      inputEl.style.height = "auto";
+      inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + "px";
+      inputEl.focus();
+    });
+  });
+}
+
+// 빠른 버튼(메뉴) 연결
+function bindQuickButtons() {
+  document.querySelectorAll(".quick-btn").forEach(btn => {
+    btn.addEventListener("click", () => showExamples(btn.dataset.menu));
+  });
+}
+bindQuickButtons();
+
+// 홈 버튼
+homeBtn.addEventListener("click", showWelcome);
+
+// 새 대화 (기록 초기화 + 홈으로)
 resetBtn.addEventListener("click", async () => {
   if (sessionId) {
     await fetch("/api/reset", {
@@ -206,5 +279,5 @@ resetBtn.addEventListener("click", async () => {
     });
   }
   sessionId = null;
-  location.reload();
+  showWelcome();
 });
