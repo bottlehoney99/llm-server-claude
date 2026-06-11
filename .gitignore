@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# 환경 설정
+.env
+*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 로그
+*.log
+
+# 에디터
+.vscode/
+.idea/
