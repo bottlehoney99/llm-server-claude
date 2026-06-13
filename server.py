@@ -1,11 +1,11 @@
 """
 바이브코딩 게임 개발 AI 에이전트 — 로컬 LLM 서버
 =================================================
-개인 PC에서 Ollama(qwen3:8b)를 띄우고, 학생들이 웹 브라우저로 접속해
+개인 PC에서 Ollama(gemma4:12b)를 띄우고, 학생들이 웹 브라우저로 접속해
 pygame 게임 개발 도움을 받을 수 있는 서버입니다.
 
 실행: python server.py
-필요: Ollama 실행 중 + qwen3:8b 모델 다운로드 완료
+필요: Ollama 실행 중 + gemma4:12b 모델 다운로드 완료
 """
 
 import os
@@ -25,13 +25,13 @@ from pydantic import BaseModel
 # 설정 (환경변수로 덮어쓸 수 있음)
 # ─────────────────────────────────────────────
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-MODEL_NAME = os.environ.get("MODEL_NAME", "qwen3:8b")
+MODEL_NAME = os.environ.get("MODEL_NAME", "gemma4:12b")
 HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8080"))
 
 # 학생이 드롭다운에서 고를 수 있는 모델 화이트리스트.
 # 20명 동시 환경에서는 여러 모델을 동시에 VRAM에 올리면 OOM이 나므로 1개로 고정한다.
-# 다른 모델을 허용하려면 콤마로 구분: ALLOWED_MODELS="qwen3:8b,llama3.1:8b"
+# 다른 모델을 허용하려면 콤마로 구분: ALLOWED_MODELS="gemma4:12b,llama3.1:8b"
 ALLOWED_MODELS = [m.strip() for m in os.environ.get("ALLOWED_MODELS", MODEL_NAME).split(",") if m.strip()]
 
 # GPU 모니터링 설정

@@ -5,10 +5,11 @@ echo   Game Dev AI Tutor - Server Start
 echo ============================================
 echo.
 
-REM Concurrency settings for ~20 users: 2 parallel requests + keep only 1 model in VRAM (avoid OOM)
+REM Concurrency settings. gemma4:12b uses ~10GB VRAM with one slot on a 12GB GPU,
+REM so only 1 parallel request fits safely (2 would risk OOM). Keep 1 model in VRAM.
 REM Note: these do NOT apply to an already-running "ollama serve".
 REM To apply, fully quit Ollama (incl. tray app) and restart.
-set OLLAMA_NUM_PARALLEL=2
+set OLLAMA_NUM_PARALLEL=1
 set OLLAMA_MAX_LOADED_MODELS=1
 
 echo [1/3] Checking Ollama...
@@ -19,11 +20,11 @@ if errorlevel 1 (
     timeout /t 3 >nul
 )
 
-echo [2/3] Checking model (qwen3:8b)...
-ollama list | findstr "qwen3:8b" >nul
+echo [2/3] Checking model (gemma4:12b)...
+ollama list | findstr "gemma4:12b" >nul
 if errorlevel 1 (
-    echo   Model not found. Downloading... (about 5.2GB)
-    ollama pull qwen3:8b
+    echo   Model not found. Downloading... (about 7.6GB)
+    ollama pull gemma4:12b
 )
 
 echo [3/3] Starting web server...

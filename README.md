@@ -1,7 +1,7 @@
 # 🎮 게임 개발 AI 튜터 서버
 
 특성화고 1학년 학생들이 pygame으로 게임을 만들도록 돕는 로컬 LLM 서버입니다.
-개인 PC에서 Ollama(qwen3:8b)를 띄우고, 학생들이 웹 브라우저로 접속합니다.
+개인 PC에서 Ollama(gemma4:12b)를 띄우고, 학생들이 웹 브라우저로 접속합니다.
 
 ---
 
@@ -72,7 +72,7 @@ cloudflared tunnel --url http://localhost:8080
 
 | 항목 | 기본값 | 설명 |
 |------|--------|------|
-| MODEL_NAME | qwen3:8b | 사용할 모델 (드롭다운에서 변경 가능) |
+| MODEL_NAME | gemma4:12b | 사용할 모델 (드롭다운에서 변경 가능) |
 | PORT | 8080 | 서버 포트 |
 | MAX_HISTORY_TURNS | 6 | 기억할 대화 턴 수 |
 | num_predict | 1536 | 응답 최대 길이 |
@@ -91,20 +91,25 @@ PORT=3000 python server.py
 
 ## 👥 동시 접속 (중요)
 
-Ollama는 기본적으로 **한 번에 1개 요청만** 처리합니다.
-20명이 동시에 쓰면 순서대로 처리되어 뒷사람이 오래 기다립니다.
+Ollama는 `OLLAMA_NUM_PARALLEL` 개수만큼만 **동시에** 생성하고, 그보다 많으면 순서대로 큐에 대기시킵니다.
 
-병렬 처리를 늘리려면 Ollama 환경변수를 설정하세요:
+**현재 기본 모델 `gemma4:12b` 기준 (RTX 5070 12GB):**
+- 모델 1슬롯이 VRAM 약 10GB를 사용 → **동시 처리 1개(`OLLAMA_NUM_PARALLEL=1`)가 안전**합니다.
+- 20명이 몰리면 순서대로 처리되어 피크 때 대기가 생깁니다(품질 우선 선택의 트레이드오프).
 
 ```bash
-# Windows (시스템 환경변수에 추가)
-OLLAMA_NUM_PARALLEL=2
+# Windows (시스템 환경변수 또는 start.bat에서 설정)
+OLLAMA_NUM_PARALLEL=1
+OLLAMA_MAX_LOADED_MODELS=1
 
 # Mac/Linux
-export OLLAMA_NUM_PARALLEL=2
+export OLLAMA_NUM_PARALLEL=1
+export OLLAMA_MAX_LOADED_MODELS=1
 ```
 
-> RTX 5070 12GB 기준 2~3개 병렬이 적당합니다. 설정 후 `nvidia-smi`로 VRAM을 확인하세요.
+> 동시 처리를 늘리고 싶다면 더 가벼운 모델이 필요합니다.
+> 예: `qwen3:8b`(약 5GB, 병렬 2 가능) 또는 `gemma4:e2b`(약 7GB, 병렬 2~3).
+> 모델을 바꾼 뒤 `nvidia-smi`로 VRAM 여유를 확인하세요. (start 스크립트는 Ollama 재시작 시에만 적용)
 
 ---
 
@@ -113,7 +118,7 @@ export OLLAMA_NUM_PARALLEL=2
 | 증상 | 원인 / 해결 |
 |------|------------|
 | "Ollama 미연결" 표시 | Ollama가 꺼져 있음 → `ollama serve` 실행 |
-| "모델 로딩 필요" 표시 | 모델 미설치 → `ollama pull qwen3:8b` |
+| "모델 로딩 필요" 표시 | 모델 미설치 → `ollama pull gemma4:12b` |
 | 응답이 너무 느림 | GPU 미사용 가능성 → `ollama ps`로 `100% GPU` 확인 |
 | 영어로 답변함 | 모델 한계 → EXAONE/Qwen 등 한국어 모델로 교체 |
 | 응답이 중간에 잘림 | `num_predict` 값을 늘리기 (server.py) |
