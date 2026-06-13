@@ -448,4 +448,17 @@ if __name__ == "__main__":
     except UnicodeEncodeError:
         print(f"  admin page: http://{HOST}:{PORT}/admin  token: {ADMIN_TOKEN}\n")
 
+    # Windows: 서버가 실행되는 동안에만 시스템 절전을 막는다.
+    # 프로세스가 종료되면(정상/크래시/강제) OS가 자동 해제 → 평소 절전 설정은 그대로 유지된다.
+    # ES_DISPLAY_REQUIRED는 일부러 빼서 화면(디스플레이) 절전은 평소대로 동작하게 둔다.
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ES_CONTINUOUS = 0x80000000
+            ES_SYSTEM_REQUIRED = 0x00000001
+            ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+            print("  절전 방지: 서버 실행 중에는 시스템이 절전되지 않습니다 (종료 시 자동 해제).\n")
+        except Exception as e:
+            print(f"  (절전 방지 설정 실패 — 무시하고 계속): {e}\n")
+
     uvicorn.run(app, host=HOST, port=PORT, log_level="info")
